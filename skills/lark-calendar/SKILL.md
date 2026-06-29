@@ -32,6 +32,7 @@ lark-cli calendar +agenda --as user
 |----------|------|
 | [`+agenda`](references/lark-calendar-agenda.md) | 查看日程安排（默认今天） |
 | [`+search-event`](references/lark-calendar-search-event.md) | 按关键词、时间范围和参会人搜索日程, 仅返回 日程ID/主题/时间等信息，详情需走 `events get` |
+| `+get` | 获取单个日程详情 |
 | [`+meeting`](references/lark-calendar-meeting.md) | 通过日程事件 ID 获取关联的视频会议信息（meeting_id、meeting_note），日程开过视频会议才会有meeting_id |
 | [`+create`](references/lark-calendar-create.md) | 创建日程并邀请参会人（ISO 8601 时间） |
 | [`+update`](references/lark-calendar-update.md) | 更新既有日程字段，或独立增量添加/移除参会人和会议室 |
@@ -39,6 +40,17 @@ lark-cli calendar +agenda --as user
 | [`+room-find`](references/lark-calendar-room-find.md) | 针对一个或多个**明确的**时间块查找可用会议室（无明确时间时禁止直接调用，需先走 +suggestion） |
 | [`+rsvp`](references/lark-calendar-rsvp.md) | 回复日程（接受/拒绝/待定） |
 | [`+suggestion`](references/lark-calendar-suggestion.md) | 根据非明确时间或一段时间范围，推荐多个可用时间块方案 |
+
+### calendar +get
+
+通过 `calendar_id` + `event_id` 获取**单个日程**的详情。只读，不修改任何数据。
+
+## 命令
+
+```bash
+# calendar_id不传，默认primary
+lark-cli calendar +get --calendar-id <calendar_id> --event-id <event_id>
+```
 
 ## 前置条件路由
 
