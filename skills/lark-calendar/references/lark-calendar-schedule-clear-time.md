@@ -38,8 +38,6 @@ lark-cli calendar +room-find \
 lark-cli calendar +freebusy --start "<start>" --end "<end>"
 ```
 
-详见 [`lark-calendar-freebusy.md`](./lark-calendar-freebusy.md)。
-
 规则：
 - 参与人过多（超过 5 人）：仅查询**当前用户**及少数核心人员忙闲即可
 - 参与人含**群组**：无需展开群组成员查询忙闲

@@ -285,6 +285,9 @@ var CalendarCreate = common.Shortcut{
 			"start":    startStr,
 			"end":      endStr,
 		}
+		if recurrence, _ := event["recurrence"].(string); recurrence != "" {
+			resultData["rrule"] = recurrence
+		}
 
 		runtime.OutFormat(resultData, nil, func(w io.Writer) {
 			var rows []map[string]interface{}

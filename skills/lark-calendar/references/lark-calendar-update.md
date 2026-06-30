@@ -64,6 +64,7 @@ lark-cli calendar +update \
 - 会议室是 resource attendee，必须使用 `omm_` ID 添加到参会人列表，不能脱离日程单独预定。
 - 更新重复性日程的某一次实例时，必须先通过 `+agenda`、`+search-event` 或实例视图定位该实例的 `event_id`。
 - 当同一次命令组合多个动作时，执行顺序为“日程字段 -> 移除参会人 -> 添加参会人”。若中途失败，不会自动回滚已成功步骤；错误信息会说明已完成的步骤。
+**⚠️ 高风险操作**: 修改时间时必须先读取原日程时长并计算新 end。如果 end 计算错误，会导致日程时长变化，用户会直接感知，禁止擅自改变原日程的时长。
 
 ## 高级用法（完整 API 命令）
 
@@ -95,4 +96,3 @@ lark-cli calendar +update \
 - [lark-calendar](../SKILL.md) -- skill 入口与路由
 - [lark-calendar-schedule-meeting](lark-calendar-schedule-meeting.md) -- 预约/改约会议与会议室工作流
 - [lark-calendar-room-find](lark-calendar-room-find.md) -- 查找可用会议室
-- [lark-calendar-freebusy](lark-calendar-freebusy.md) -- 查询忙闲

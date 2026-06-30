@@ -118,5 +118,4 @@ lark-cli calendar +suggestion \
 ## 参考
 
 - [lark-calendar-create](lark-calendar-create.md) — 创建日程
-- [lark-calendar-freebusy](lark-calendar-freebusy.md) — 查询忙闲时段和rsvp状态
 - [lark-calendar](../SKILL.md) — skill 入口与路由

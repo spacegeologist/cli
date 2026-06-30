@@ -76,6 +76,7 @@
 - **新建流**：使用用户给出的时间，或默认补全出的时间范围
 - **编辑流且不改时间**：已定位日程的当前 `start/end` 就是明确时间
 - **编辑流且改时间**：用户想改到的新时间；若表达模糊，进入模糊时间分支
+**注意**: 在执行修改日程/会议时间的任务时，必须先获取原日程的持续时长。如果用户只提供了新的开始时间，你必须根据原时长自动计算出新的结束时间，严格保持原时长不变，禁止擅自改变原日程的时长。
 
 ## 分支路由
 
@@ -115,7 +116,6 @@ lark-cli calendar +update \
 - [lark-calendar-schedule-clear-time.md](./lark-calendar-schedule-clear-time.md)
 - [lark-calendar-schedule-fuzzy-time.md](./lark-calendar-schedule-fuzzy-time.md)
 - [lark-calendar-room-find.md](./lark-calendar-room-find.md)
-- [lark-calendar-freebusy.md](./lark-calendar-freebusy.md)
 - [lark-calendar-suggestion.md](./lark-calendar-suggestion.md)
 - [lark-calendar-create.md](./lark-calendar-create.md)
 - [lark-calendar-update.md](./lark-calendar-update.md)

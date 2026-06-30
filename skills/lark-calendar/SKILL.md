@@ -30,13 +30,11 @@ lark-cli calendar +agenda --as user
 
 | Shortcut | 说明 |
 |----------|------|
-| [`+agenda`](references/lark-calendar-agenda.md) | 查看日程安排（默认今天） |
-| [`+search-event`](references/lark-calendar-search-event.md) | 按关键词、时间范围和参会人搜索日程, 仅返回 日程ID/主题/时间等信息，详情需走 `events get` |
-| `+get` | 获取单个日程详情 |
+| `+agenda` | 查看日程安排（默认今天） |
 | [`+meeting`](references/lark-calendar-meeting.md) | 通过日程事件 ID 获取关联的视频会议信息（meeting_id、meeting_note），日程开过视频会议才会有meeting_id |
 | [`+create`](references/lark-calendar-create.md) | 创建日程并邀请参会人（ISO 8601 时间） |
 | [`+update`](references/lark-calendar-update.md) | 更新既有日程字段，或独立增量添加/移除参会人和会议室 |
-| [`+freebusy`](references/lark-calendar-freebusy.md) | 查询用户主日历的忙闲信息和 RSVP 状态（纯查询场景；预约场景走 `+suggestion`） |
+| `+freebusy` | 查询用户主日历的忙闲信息和 RSVP 状态（纯查询场景；预约场景走 `+suggestion`） |
 | [`+room-find`](references/lark-calendar-room-find.md) | 针对一个或多个**明确的**时间块查找可用会议室（无明确时间时禁止直接调用，需先走 +suggestion） |
 | [`+rsvp`](references/lark-calendar-rsvp.md) | 回复日程（接受/拒绝/待定） |
 | [`+suggestion`](references/lark-calendar-suggestion.md) | 根据非明确时间或一段时间范围，推荐多个可用时间块方案 |
@@ -51,6 +49,54 @@ lark-cli calendar +agenda --as user
 # calendar_id不传，默认primary
 lark-cli calendar +get --calendar-id <calendar_id> --event-id <event_id>
 ```
+
+### calendar +search-event
+
+按关键词、时间范围和参会人搜索日程。只读，仅返回基础字段（`event_id`/`summary`/`start`/`end` 等），需要详情走 `+get`。
+
+## 命令
+
+```bash
+# query 按关键词 可选
+# start/end 按时间范围（ISO 8601 或 YYYY-MM-DD）可选
+# attendee-ids 按参会人（自动识别 ou_ 用户 / oc_ 群聊 / omm_ 会议室前缀）可选
+# page-token 分页游标，用于继续翻页 可选
+# page-size 每页数量，默认 30 可选
+lark-cli calendar +search-event --query "周会" --start 2026-04-20 --end 2026-04-27 --attendee-ids "ou_user1,oc_chat1,omm_room1" --page-token <page_token> --page-size 30
+```
+
+### calendar +agenda
+
+查看近期日程安排。只读。默认查询当天，结果应整理为按日期分组、按开始时间升序的易读时间线。
+
+## 命令
+
+```bash
+# start/end 时间范围（ISO 8601 / YYYY-MM-DD / Unix 秒），均可选；默认当天
+# calendar-id 日历 ID（省略走主日历）可选
+lark-cli calendar +agenda --start 2026-03-10 --end 2026-03-17 --calendar-id <calendar_id>
+```
+
+注意：
+- 已取消的日程自动过滤；无日程时直接告知"日程清空"。
+- 时间范围超过 40 天会自动拆分查询并合并结果。
+
+### calendar +freebusy
+
+查询主日历忙闲时段和 RSVP 状态。只读，仅返回忙碌时段起止时间，不含日程标题等隐私信息；其他订阅日历不在范围内。
+
+## 命令
+
+```bash
+# start/end 时间范围（ISO 8601 / YYYY-MM-DD / Unix 秒），均可选；默认当天
+# user-id 目标用户 open_id（ou_ 前缀）可选；默认当前登录用户，bot 身份必须显式指定
+lark-cli calendar +freebusy --start 2026-03-11 --end 2026-03-12 --user-id ou_xxx
+```
+
+用法提示：
+- **仅判断是否有空** → `+freebusy`；**需要日程详情** → `+agenda`。
+- 检查多人可用性：分别调用并对比，找共同空闲。
+- 预约/改约场景下，调用规则（参与人过多、含群组、来自 `+suggestion` 等）详见 [schedule-clear-time.md § 查询忙闲](references/lark-calendar-schedule-clear-time.md#2-查询忙闲)。
 
 ## 前置条件路由
 
