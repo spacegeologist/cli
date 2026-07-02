@@ -1,19 +1,18 @@
 # 重复性日程操作规范
 
-> **前置条件：** 先阅读 [`../lark-shared/SKILL.md`](../../lark-shared/SKILL.md) 了解认证、全局参数和安全规则。
-
 重复性日程的编辑/删除分为三种范围：「仅此次」「全部」「此次及后续」。用户未明确范围时，**必须询问确认**。
 
 ## 关键概念
 
-- **原重复性日程**：携带 `rrule` 的日程本体，拥有一个 `event_id`。系列的所有属性（标题、时间、rrule、描述等）都挂在本体上。
-- **例外（Exception）**：对某次实例做过「仅此次」编辑后产生的独立日程，拥有独立的 `event_id`，其 `recurring_event_id` 指向原重复性日程。
+- **event_id 结构**：`event_id` 的格式为 `{event_uid}_{originalTime}`。普通日程或重复性日程本体的 `originalTime` 为 `0`；例外的 `originalTime > 0`，代表该例外在原重复性序列中本来的时间位置。因此 `{event_uid}_0` 即为原重复性日程的 `event_id`。
+- **原重复性日程**：携带 `rrule` 的日程本体，`event_id` 形如 `{event_uid}_0`。系列的所有属性（标题、时间、rrule、描述等）都挂在本体上。
+- **例外（Exception）**：对某次实例做过「仅此次」编辑后产生的独立日程，`event_id` 形如 `{event_uid}_{originalTime}`（`originalTime > 0`）。通过 `event_uid` 部分即可关联回原重复性日程。
 - 删除/更新原重复性日程 **不会** 级联处理例外——必须手动逐个处理。
 
 ## 前置步骤（所有范围通用）
 
 1. 通过 `+agenda` 或 `+search-event` 定位重复性日程，获取原重复性日程的 `event_id`。
-2. 通过 `events instance_view` 或 `+agenda` 列出实例，识别哪些是例外（`recurring_event_id` ≠ 自身 `event_id`，且自身是独立日程）。
+2. 通过 `events instance_view` 或 `+agenda` 列出实例，识别哪些是例外（`event_id` 中 `originalTime > 0` 的即为例外）。
 3. 确认用户的操作范围。
 
 ## 编辑全部（更新时间）
@@ -82,9 +81,6 @@
 ## 注意事项
 
 - 涉及时间戳计算（如推算 UNTIL 日期）时，必须调用系统命令或脚本，禁止心算。
-- 删除/修改后等待 2 秒再查询验证（API 最终一致性）。
-- `--rrule` 不支持 COUNT，只能用 UNTIL 限制结束。
-- 操作前必须确认用户意图——这是破坏性操作。
 
 ## 参考
 
