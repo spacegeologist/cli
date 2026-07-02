@@ -39,22 +39,18 @@ lark-cli calendar +agenda --as user
 | [`+rsvp`](references/lark-calendar-rsvp.md) | 回复日程（接受/拒绝/待定） |
 | [`+suggestion`](references/lark-calendar-suggestion.md) | 根据非明确时间或一段时间范围，推荐多个可用时间块方案 |
 
-### calendar +get
+### `+get` — 单日程详情
 
-通过 `calendar_id` + `event_id` 获取**单个日程**的详情。只读，不修改任何数据。
-
-## 命令
+通过 `calendar_id` + `event_id` 获取**单个日程**详情。
 
 ```bash
 # calendar_id不传，默认primary
 lark-cli calendar +get --calendar-id <calendar_id> --event-id <event_id>
 ```
 
-### calendar +search-event
+### `+search-event` — 按关键词、时间范围和参会人搜索日程
 
-按关键词、时间范围和参会人搜索日程。只读，仅返回基础字段（`event_id`/`summary`/`start`/`end` 等），需要详情走 `+get`。
-
-## 命令
+仅返回基础字段（`event_id`/`summary`/`start`/`end` 等），需要详情请走 `+get`。
 
 ```bash
 # query 按关键词 可选
@@ -65,15 +61,13 @@ lark-cli calendar +get --calendar-id <calendar_id> --event-id <event_id>
 lark-cli calendar +search-event --query "周会" --start 2026-04-20 --end 2026-04-27 --attendee-ids "ou_user1,oc_chat1,omm_room1" --page-token <page_token> --page-size 30
 ```
 
-### calendar +agenda
+### `+agenda` — 查看近期日程安排
 
-查看近期日程安排。只读。默认查询当天，结果应整理为按日期分组、按开始时间升序的易读时间线。
-
-## 命令
+默认查询当天。结果应整理为按日期分组、按开始时间升序的易读时间线。
 
 ```bash
 # start/end 时间范围（ISO 8601 / YYYY-MM-DD / Unix 秒），均可选；默认当天
-# calendar-id 日历 ID（省略走主日历）可选
+# calendar-id 日历 ID（默认primary）可选
 lark-cli calendar +agenda --start 2026-03-10 --end 2026-03-17 --calendar-id <calendar_id>
 ```
 
@@ -81,11 +75,9 @@ lark-cli calendar +agenda --start 2026-03-10 --end 2026-03-17 --calendar-id <cal
 - 已取消的日程自动过滤；无日程时直接告知"日程清空"。
 - 时间范围超过 40 天会自动拆分查询并合并结果。
 
-### calendar +freebusy
+### `+freebusy` — 查询主日历忙闲时段和 RSVP 状态
 
-查询主日历忙闲时段和 RSVP 状态。只读，仅返回忙碌时段起止时间，不含日程标题等隐私信息；其他订阅日历不在范围内。
-
-## 命令
+仅返回忙碌时段起止时间，不含日程标题等隐私信息；其他订阅日历不在范围内。
 
 ```bash
 # start/end 时间范围（ISO 8601 / YYYY-MM-DD / Unix 秒），均可选；默认当天
@@ -158,37 +150,28 @@ lark-cli calendar +freebusy --start 2026-03-11 --end 2026-03-12 --user-id ou_xxx
 ## API Resources
 
 ```bash
+# 通用调用格式
 lark-cli calendar <resource> <method> [flags]
+
+# 查询用户主日历
+lark-cli calendar calendars primary
+
+# 获取日程分享链接
+lark-cli calendar events share_info --calendar-id <calendar_id> --event-id <event_id>
+
+# 删除日程
+lark-cli calendar events delete --calendar-id <calendar_id> --event-id <event_id>
 ```
 
-### calendars
+> `calendar_id` 可以直接传 `primary`，代表当前调用身份的主日历 ID。
 
-  - `create` — 创建共享日历
-  - `delete` — 删除共享日历
-  - `get` — 查询日历信息
-  - `list` — 查询日历列表
-  - `patch` — 更新日历信息
-  - `primary` — 查询用户主日历
-  - `search` — 搜索日历
+### 查询资源的方法列表以及方法的使用方式
 
-### event.attendees
+- 列出某资源下的方法：`lark-cli calendar <resource> -h`
+- 查看方法的cli flag：`lark-cli calendar <resource> <method> -h`
+- 查看方法API参数：`lark-cli schema calendar.<resource>.<method>`
 
-  - `batch_delete` — 删除日程参与人
-  - `create` — 添加日程参与人
-  - `list` — 获取日程参与人列表
-
-### events
-
-  - `create` — 创建日程
-  - `delete` — 删除日程
-  - `get` — 获取日程
-  - `instance_view` — 查询日程视图
-  - `patch` — 更新日程
-  - `share_info` — 获取日程分享链接
-
-### freebusys
-
-  - `list` — 查询主日历日程忙闲信息
+`<resource>` 为 `calendars`（日历本身）/ `events`（日程）/ `event.attendees`（参与人）/ `freebusys`（忙闲）。例：`lark-cli schema calendar.events.delete`。
 
 ## 不在本 skill 范围
 
