@@ -197,18 +197,31 @@ function getExistingAppId(binPath) {
 
 /** Parse --lang from process.argv, returns "zh", "en", or null. */
 function parseLangArg() {
+  const val = parseStringArg("--lang");
+  if (val === "zh" || val === "en") return val;
+  return null;
+}
+
+function parseStringArg(name) {
   const args = process.argv.slice(2);
   for (let i = 0; i < args.length; i++) {
-    if (args[i] === "--lang" && args[i + 1]) {
-      const val = args[i + 1].toLowerCase();
-      if (val === "zh" || val === "en") return val;
+    if (args[i] === name && args[i + 1]) {
+      return args[i + 1];
     }
-    if (args[i].startsWith("--lang=")) {
-      const val = args[i].split("=")[1].toLowerCase();
-      if (val === "zh" || val === "en") return val;
+    if (args[i].startsWith(`${name}=`)) {
+      return args[i].slice(name.length + 1);
     }
   }
   return null;
+}
+
+function skillsUpdateArgs() {
+  const args = ["update"];
+  const layout = parseStringArg("--skills-layout");
+  const collected = parseStringArg("--collected-skills");
+  if (layout) args.push("--skills-layout", layout);
+  if (collected) args.push("--collected-skills", collected);
+  return args;
 }
 
 // ---------------------------------------------------------------------------
@@ -270,8 +283,12 @@ async function stepInstallSkills(msg) {
   const s = p.spinner();
   s.start(msg.step2Spinner);
   try {
-    if (await skillsAlreadyInstalled()) {
-      s.stop(msg.step2Skip);
+    const larkCli = whichLarkCli();
+    if (larkCli) {
+      await runSilentAsync(larkCli, skillsUpdateArgs(), {
+        timeout: 120000,
+      });
+      s.stop(msg.step2Done);
       return;
     }
     try {

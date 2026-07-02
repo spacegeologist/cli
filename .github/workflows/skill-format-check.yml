@@ -5,12 +5,14 @@ on:
     branches: [main]
     paths:
       - "skills/**"
+      - "isolated-skills/**"
       - "scripts/skill-format-check/**"
       - ".github/workflows/skill-format-check.yml"
   pull_request:
     branches: [main]
     paths:
       - "skills/**"
+      - "isolated-skills/**"
       - "scripts/skill-format-check/**"
       - ".github/workflows/skill-format-check.yml"
 

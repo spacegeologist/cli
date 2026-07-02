@@ -6,24 +6,27 @@ const path = require('path');
 
 // Allow passing a target directory as the first argument.
 // If provided, resolve against process.cwd() so it behaves as the user expects.
-// If not provided, default to '../../skills' relative to this script's directory.
+// If not provided, default to the official skill directories.
 const targetDirArg = process.argv[2];
-const SKILLS_DIR = targetDirArg
-  ? path.resolve(process.cwd(), targetDirArg)
-  : path.resolve(__dirname, '../../skills');
+const TARGET_DIRS = targetDirArg
+  ? [path.resolve(process.cwd(), targetDirArg)]
+  : [
+      path.resolve(__dirname, '../../skills'),
+      path.resolve(__dirname, '../../isolated-skills'),
+    ];
 
-function checkSkillFormat() {
-  console.log(`Checking skill format in ${SKILLS_DIR}...`);
+function checkSkillFormatInDir(skillsDir) {
+  console.log(`Checking skill format in ${skillsDir}...`);
 
-  if (!fs.existsSync(SKILLS_DIR)) {
-    console.error('Skills directory not found:', SKILLS_DIR);
+  if (!fs.existsSync(skillsDir)) {
+    console.error('Skills directory not found:', skillsDir);
     process.exit(1);
   }
 
   let skills;
   try {
     skills = fs
-      .readdirSync(SKILLS_DIR, { withFileTypes: true })
+      .readdirSync(skillsDir, { withFileTypes: true })
       .filter(entry => entry.isDirectory())
       .map(entry => entry.name);
   } catch (err) {
@@ -40,7 +43,7 @@ function checkSkillFormat() {
         return;
     }
 
-    const skillPath = path.join(SKILLS_DIR, skill);
+    const skillPath = path.join(skillsDir, skill);
     const skillFile = path.join(skillPath, 'SKILL.md');
 
     if (!fs.existsSync(skillFile)) {
@@ -88,12 +91,18 @@ function checkSkillFormat() {
     }
   });
 
-  if (hasErrors) {
+  return !hasErrors;
+}
+
+function checkSkillFormat() {
+  const ok = TARGET_DIRS.map(checkSkillFormatInDir).every(Boolean);
+
+  if (!ok) {
     console.error('\n❌ Skill format check failed. Please fix the errors above.');
     process.exit(1);
-  } else {
-    console.log('\n✅ Skill format check passed!');
   }
+
+  console.log('\n✅ Skill format check passed!');
 }
 
 checkSkillFormat();

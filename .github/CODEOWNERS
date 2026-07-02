@@ -2,6 +2,7 @@
 
 # Last match wins: existing domains below are exempt, only new skills/ entries need review.
 /skills/ @liangshuo-1
+/isolated-skills/ @liangshuo-1
 /skills/lark-approval/
 /skills/lark-apps/
 /skills/lark-attendance/

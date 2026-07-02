@@ -1,6 +1,6 @@
 # Skill Format Check
 
-This directory contains a script to validate the format of `SKILL.md` files located in the `../../skills` directory.
+This directory contains a script to validate the format of `SKILL.md` files located in the `../../skills` and `../../isolated-skills` directories.
 
 ## Purpose
 
@@ -13,7 +13,7 @@ The `index.js` script ensures that all `SKILL.md` files conform to the standard 
 
 ## Usage
 
-This script is executed automatically via GitHub Actions (`.github/workflows/skill-format-check.yml`) on pull requests and pushes that modify the `skills/` directory.
+This script is executed automatically via GitHub Actions (`.github/workflows/skill-format-check.yml`) on pull requests and pushes that modify the `skills/` or `isolated-skills/` directory.
 
 To run the check manually from the root of the repository, execute:
 

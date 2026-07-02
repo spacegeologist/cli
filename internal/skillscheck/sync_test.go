@@ -205,6 +205,19 @@ func TestPlanForceRestoresAllOfficial(t *testing.T) {
 	assertStrings(t, got.SkippedDeleted, []string{})
 }
 
+func TestPlanSuiteInstallsAllNormalOfficialSkills(t *testing.T) {
+	got := PlanSync(SyncInput{
+		Version:        "1.0.33",
+		Layout:         LayoutSuite,
+		OfficialSkills: []string{"lark-calendar", "lark-suite", "lark-mail"},
+		LocalSkills:    []string{"lark-suite"},
+	})
+
+	assertStrings(t, got.OfficialSkills, []string{"lark-calendar", "lark-mail"})
+	assertStrings(t, got.ToUpdate, []string{"lark-calendar", "lark-mail"})
+	assertStrings(t, got.SkippedDeleted, []string{})
+}
+
 type fakeSkillsRunner struct {
 	officialIndexOut string
 	officialOut      string
@@ -216,8 +229,10 @@ type fakeSkillsRunner struct {
 	globalErr        error
 	installErr       error
 	installAllErr    error
+	installSuiteErr  error
 	installed        [][]string
 	installedAll     int
+	installedSuite   int
 	listedIndex      int
 	listedOfficial   int
 	listedGlobalJSON int
@@ -273,6 +288,43 @@ func globalSkillsJSONOutput(names ...string) string {
 	return b.String()
 }
 
+func globalSkillsJSONFromDir(dir string, names ...string) string {
+	var b strings.Builder
+	b.WriteString("[")
+	for i, name := range names {
+		if i > 0 {
+			b.WriteString(",")
+		}
+		fmt.Fprintf(&b, `{"name":%q,"path":%q,"scope":"global","agents":["Codex"]}`, name, filepath.Join(dir, name))
+	}
+	b.WriteString("]")
+	return b.String()
+}
+
+func createTestSkill(t *testing.T, dir, name, description string) {
+	t.Helper()
+	skillDir := filepath.Join(dir, name)
+	if err := os.MkdirAll(skillDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	content := fmt.Sprintf("---\nname: %s\ndescription: %s\n---\n\n# %s\n", name, description, name)
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func createTestSuiteSkill(t *testing.T, dir string) {
+	t.Helper()
+	skillDir := filepath.Join(dir, suiteSkillName)
+	if err := os.MkdirAll(skillDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	content := "---\nname: lark-suite\ndescription: suite\n---\n\n## 能力路由\n\n" + suiteRoutesPlaceholder + "\n"
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func (f *fakeSkillsRunner) ListOfficialSkillsIndex() *selfupdate.NpmResult {
 	f.listedIndex++
 	r := &selfupdate.NpmResult{}
@@ -319,6 +371,13 @@ func (f *fakeSkillsRunner) InstallAllSkills() *selfupdate.NpmResult {
 	return r
 }
 
+func (f *fakeSkillsRunner) InstallSuiteSkill() *selfupdate.NpmResult {
+	f.installedSuite++
+	r := &selfupdate.NpmResult{}
+	r.Err = f.installSuiteErr
+	return r
+}
+
 func TestSyncSkills_WritesStateAndDoesNotWriteStamp(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("LARKSUITE_CLI_CONFIG_DIR", dir)
@@ -361,8 +420,240 @@ func TestSyncSkills_WritesStateAndDoesNotWriteStamp(t *testing.T) {
 	assertStrings(t, state.UpdatedSkills, []string{"lark-calendar", "lark-new"})
 	assertStrings(t, state.AddedOfficialSkills, []string{"lark-new"})
 	assertStrings(t, state.SkippedDeletedSkills, []string{"lark-mail"})
+	if state.Layout != LayoutSeparate {
+		t.Fatalf("state.Layout = %q, want %q", state.Layout, LayoutSeparate)
+	}
 	if _, err := os.Stat(filepath.Join(dir, "skills.stamp")); !os.IsNotExist(err) {
 		t.Fatalf("skills.stamp exists or stat failed with unexpected err: %v", err)
+	}
+}
+
+func TestSyncSkills_SuiteAssemblesSubskillsAndRoutes(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("LARKSUITE_CLI_CONFIG_DIR", t.TempDir())
+	createTestSkill(t, dir, "lark-calendar", "Calendar operations")
+	createTestSkill(t, dir, "lark-shared", "Shared auth and troubleshooting")
+	createTestSuiteSkill(t, dir)
+
+	runner := &fakeSkillsRunner{
+		officialIndexOut: officialSkillsIndexOutput("lark-calendar", "lark-shared"),
+		globalJSONOut:    globalSkillsJSONFromDir(dir, "lark-calendar", "lark-shared", "lark-suite"),
+	}
+	result := SyncSkills(SyncOptions{
+		Version: "1.0.33",
+		Layout:  LayoutSuite,
+		Runner:  runner,
+		Now:     func() time.Time { return time.Date(2026, 5, 18, 12, 0, 0, 0, time.UTC) },
+	})
+
+	if result.Err != nil {
+		t.Fatalf("SyncSkills() err = %v, want nil", result.Err)
+	}
+	if runner.installedSuite != 1 {
+		t.Fatalf("installedSuite = %d, want 1", runner.installedSuite)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "lark-calendar")); !os.IsNotExist(err) {
+		t.Fatalf("top-level lark-calendar still exists or stat failed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "lark-suite", "references", "subskills", "lark-calendar", "SKILL.md")); err != nil {
+		t.Fatalf("nested lark-calendar missing: %v", err)
+	}
+	suite, err := os.ReadFile(filepath.Join(dir, "lark-suite", "SKILL.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(suite), "- lark-calendar: Calendar operations") {
+		t.Fatalf("suite routes were not generated from descriptions:\n%s", string(suite))
+	}
+	state, readable, err := ReadState()
+	if err != nil || !readable {
+		t.Fatalf("ReadState() = (_, %v, %v), want readable", readable, err)
+	}
+	if state.Layout != LayoutSuite {
+		t.Fatalf("state.Layout = %q, want %q", state.Layout, LayoutSuite)
+	}
+}
+
+func TestSyncSkills_HybridCopiesSharedAndMovesCollected(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("LARKSUITE_CLI_CONFIG_DIR", t.TempDir())
+	createTestSkill(t, dir, "lark-calendar", "Calendar operations")
+	createTestSkill(t, dir, "lark-mail", "Mail operations")
+	createTestSkill(t, dir, "lark-shared", "Shared auth and troubleshooting")
+	createTestSuiteSkill(t, dir)
+
+	runner := &fakeSkillsRunner{
+		officialIndexOut: officialSkillsIndexOutput("lark-calendar", "lark-mail", "lark-shared"),
+		globalJSONOut:    globalSkillsJSONFromDir(dir, "lark-calendar", "lark-mail", "lark-shared", "lark-suite"),
+	}
+	result := SyncSkills(SyncOptions{
+		Version:         "1.0.33",
+		Layout:          LayoutHybrid,
+		CollectedSkills: []string{"lark-calendar"},
+		Runner:          runner,
+		Now:             time.Now,
+	})
+
+	if result.Err != nil {
+		t.Fatalf("SyncSkills() err = %v, want nil", result.Err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "lark-calendar")); !os.IsNotExist(err) {
+		t.Fatalf("top-level lark-calendar still exists or stat failed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "lark-mail", "SKILL.md")); err != nil {
+		t.Fatalf("top-level lark-mail should remain: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "lark-shared", "SKILL.md")); err != nil {
+		t.Fatalf("top-level lark-shared should remain in hybrid: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "lark-suite", "references", "subskills", "lark-shared", "SKILL.md")); err != nil {
+		t.Fatalf("nested lark-shared copy missing: %v", err)
+	}
+	state, readable, err := ReadState()
+	if err != nil || !readable {
+		t.Fatalf("ReadState() = (_, %v, %v), want readable", readable, err)
+	}
+	assertStrings(t, state.CollectedSkills, []string{"lark-calendar"})
+}
+
+func TestSyncSkills_HybridCollectsNewOfficialSkillsIntoSuite(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("LARKSUITE_CLI_CONFIG_DIR", t.TempDir())
+	if err := WriteState(SkillsState{
+		Version:         "1.0.32",
+		Layout:          LayoutHybrid,
+		OfficialSkills:  []string{"lark-calendar", "lark-shared"},
+		CollectedSkills: []string{"lark-calendar"},
+		UpdatedAt:       "2026-05-18T00:00:00Z",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	createTestSkill(t, dir, "lark-calendar", "Calendar operations")
+	createTestSkill(t, dir, "lark-new", "New operations")
+	createTestSkill(t, dir, "lark-shared", "Shared auth and troubleshooting")
+	createTestSuiteSkill(t, dir)
+
+	runner := &fakeSkillsRunner{
+		officialIndexOut: officialSkillsIndexOutput("lark-calendar", "lark-new", "lark-shared"),
+		globalJSONOut:    globalSkillsJSONFromDir(dir, "lark-calendar", "lark-new", "lark-shared", "lark-suite"),
+	}
+	result := SyncSkills(SyncOptions{
+		Version:         "1.0.33",
+		Layout:          LayoutHybrid,
+		CollectedSkills: []string{"lark-calendar"},
+		Runner:          runner,
+		Now:             time.Now,
+	})
+
+	if result.Err != nil {
+		t.Fatalf("SyncSkills() err = %v, want nil", result.Err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "lark-suite", "references", "subskills", "lark-new", "SKILL.md")); err != nil {
+		t.Fatalf("new official skill should be collected into suite: %v", err)
+	}
+	state, readable, err := ReadState()
+	if err != nil || !readable {
+		t.Fatalf("ReadState() = (_, %v, %v), want readable", readable, err)
+	}
+	assertStrings(t, state.CollectedSkills, []string{"lark-calendar", "lark-new"})
+}
+
+func TestSyncSkills_SuiteExcludesUserDeletedSubskillAndRebuildsRoutes(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("LARKSUITE_CLI_CONFIG_DIR", t.TempDir())
+	if err := WriteState(SkillsState{
+		Version:        "1.0.32",
+		Layout:         LayoutSuite,
+		OfficialSkills: []string{"lark-calendar", "lark-mail", "lark-shared"},
+		UpdatedAt:      "2026-05-18T00:00:00Z",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	createTestSkill(t, dir, "lark-calendar", "Calendar operations")
+	createTestSkill(t, dir, "lark-new", "New operations")
+	createTestSkill(t, dir, "lark-shared", "Shared auth and troubleshooting")
+	createTestSuiteSkill(t, dir)
+
+	runner := &fakeSkillsRunner{
+		officialIndexOut: officialSkillsIndexOutput("lark-calendar", "lark-mail", "lark-new", "lark-shared"),
+		globalJSONOut:    globalSkillsJSONFromDir(dir, "lark-calendar", "lark-new", "lark-shared", "lark-suite"),
+	}
+	result := SyncSkills(SyncOptions{
+		Version: "1.0.33",
+		Layout:  LayoutSuite,
+		Runner:  runner,
+		Now:     time.Now,
+	})
+
+	if result.Err != nil {
+		t.Fatalf("SyncSkills() err = %v, want nil", result.Err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "lark-suite", "references", "subskills", "lark-mail")); !os.IsNotExist(err) {
+		t.Fatalf("deleted subskill should not be regenerated, stat err: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "lark-suite", "references", "subskills", "lark-new", "SKILL.md")); err != nil {
+		t.Fatalf("new official skill should be regenerated into suite: %v", err)
+	}
+	state, readable, err := ReadState()
+	if err != nil || !readable {
+		t.Fatalf("ReadState() = (_, %v, %v), want readable", readable, err)
+	}
+	assertStrings(t, state.SkippedDeletedSkills, []string{"lark-mail"})
+}
+
+func TestSyncSkills_SuiteInstallFailureDoesNotFallbackToSeparate(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("LARKSUITE_CLI_CONFIG_DIR", t.TempDir())
+	runner := &fakeSkillsRunner{
+		officialIndexOut: officialSkillsIndexOutput("lark-calendar", "lark-shared"),
+		globalJSONOut:    globalSkillsJSONFromDir(dir, "lark-calendar", "lark-shared"),
+		installErr:       fmt.Errorf("ordinary install failed"),
+	}
+
+	result := SyncSkills(SyncOptions{
+		Version: "1.0.33",
+		Layout:  LayoutSuite,
+		Runner:  runner,
+		Now:     time.Now,
+	})
+
+	if result.Action != "failed" || result.Err == nil {
+		t.Fatalf("SyncSkills() = %+v, want failed result", result)
+	}
+	if runner.installedAll != 0 {
+		t.Fatalf("installedAll = %d, want 0; suite must not silently fallback to separate", runner.installedAll)
+	}
+	if state, readable, err := ReadState(); err != nil || readable || state != nil {
+		t.Fatalf("ReadState() = (%+v, %v, %v), want no successful state", state, readable, err)
+	}
+}
+
+func TestSyncSkills_SuiteSpecialSourceFailureDoesNotWriteState(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("LARKSUITE_CLI_CONFIG_DIR", t.TempDir())
+	createTestSkill(t, dir, "lark-calendar", "Calendar operations")
+	createTestSkill(t, dir, "lark-shared", "Shared auth and troubleshooting")
+	runner := &fakeSkillsRunner{
+		officialIndexOut: officialSkillsIndexOutput("lark-calendar", "lark-shared"),
+		globalJSONOut:    globalSkillsJSONFromDir(dir, "lark-calendar", "lark-shared"),
+		installSuiteErr:  fmt.Errorf("special source failed"),
+	}
+
+	result := SyncSkills(SyncOptions{
+		Version: "1.0.33",
+		Layout:  LayoutSuite,
+		Runner:  runner,
+		Now:     time.Now,
+	})
+
+	if result.Action != "failed" || result.Err == nil {
+		t.Fatalf("SyncSkills() = %+v, want failed result", result)
+	}
+	if runner.installedAll != 0 {
+		t.Fatalf("installedAll = %d, want 0; special source failure must not fallback to separate", runner.installedAll)
+	}
+	if state, readable, err := ReadState(); err != nil || readable || state != nil {
+		t.Fatalf("ReadState() = (%+v, %v, %v), want no successful state", state, readable, err)
 	}
 }
 
@@ -574,7 +865,7 @@ func TestSyncSkills_LocalListsFailureFallsBackToFullInstall(t *testing.T) {
 	}
 }
 
-func TestSyncSkills_ParseEmptyLocalListsFallBackToFullInstall(t *testing.T) {
+func TestSyncSkills_EmptyLocalJSONInstallsAllOfficialIncrementally(t *testing.T) {
 	dir := t.TempDir()
 	t.Setenv("LARKSUITE_CLI_CONFIG_DIR", dir)
 	runner := &fakeSkillsRunner{
@@ -585,14 +876,15 @@ func TestSyncSkills_ParseEmptyLocalListsFallBackToFullInstall(t *testing.T) {
 	}
 
 	result := SyncSkills(SyncOptions{Version: "1.0.33", Runner: runner, Now: time.Now})
-	if result.Action != "fallback_synced" {
-		t.Fatalf("SyncSkills() action = %q, want fallback_synced", result.Action)
+	if result.Action != "synced" {
+		t.Fatalf("SyncSkills() action = %q, want synced", result.Action)
 	}
-	if len(runner.installed) != 0 {
-		t.Fatalf("installed = %#v, want no incremental installs", runner.installed)
+	if len(runner.installed) != 1 {
+		t.Fatalf("installed = %#v, want one incremental install", runner.installed)
 	}
-	if runner.installedAll != 1 {
-		t.Fatalf("installedAll = %d, want 1", runner.installedAll)
+	assertStrings(t, runner.installed[0], []string{"lark-calendar", "lark-mail"})
+	if runner.installedAll != 0 {
+		t.Fatalf("installedAll = %d, want 0", runner.installedAll)
 	}
 }
 

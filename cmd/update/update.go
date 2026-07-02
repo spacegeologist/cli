@@ -85,10 +85,12 @@ func symArrow() string {
 
 // UpdateOptions holds inputs for the update command.
 type UpdateOptions struct {
-	Factory *cmdutil.Factory
-	JSON    bool
-	Force   bool
-	Check   bool
+	Factory         *cmdutil.Factory
+	JSON            bool
+	Force           bool
+	Check           bool
+	SkillsLayout    string
+	CollectedSkills string
 }
 
 // NewCmdUpdate creates the update command.
@@ -114,6 +116,8 @@ Use --check to only check for updates without installing.`,
 	cmd.Flags().BoolVar(&opts.JSON, "json", false, "structured JSON output")
 	cmd.Flags().BoolVar(&opts.Force, "force", false, "force reinstall even if already up to date")
 	cmd.Flags().BoolVar(&opts.Check, "check", false, "only check for updates, do not install")
+	cmd.Flags().StringVar(&opts.SkillsLayout, "skills-layout", "", "skills layout: separate, suite, or hybrid")
+	cmd.Flags().StringVar(&opts.CollectedSkills, "collected-skills", "", "comma-separated skills collected into lark-suite; only valid with --skills-layout hybrid")
 	cmdutil.SetRisk(cmd, "high-risk-write")
 
 	return cmd
@@ -121,6 +125,9 @@ Use --check to only check for updates without installing.`,
 
 func updateRun(opts *UpdateOptions) error {
 	io := opts.Factory.IOStreams
+	if err := validateSkillsLayoutOptions(opts); err != nil {
+		return reportError(opts, io, output.ExitValidation, "validation_error", "%s", err)
+	}
 	cur := currentVersion()
 	updater := newUpdater()
 
@@ -144,7 +151,7 @@ func updateRun(opts *UpdateOptions) error {
 	if !opts.Force && !update.IsNewer(latest, cur) {
 		var skillsResult *skillscheck.SyncResult
 		if !opts.Check {
-			skillsResult = runSkillsAndState(updater, io, cur, opts.Force)
+			skillsResult = runSkillsAndState(updater, io, cur, opts.Force, opts.SkillsLayout, opts.CollectedSkills, !opts.JSON)
 		}
 		return reportAlreadyUpToDate(opts, io, cur, latest, skillsResult, opts.Check)
 	}
@@ -202,7 +209,7 @@ func reportCheckResult(opts *UpdateOptions, io *cmdutil.IOStreams, cur, latest s
 }
 
 func doManualUpdate(opts *UpdateOptions, io *cmdutil.IOStreams, cur, latest string, detect selfupdate.DetectResult, updater *selfupdate.Updater) error {
-	skillsResult := runSkillsAndState(updater, io, cur, opts.Force)
+	skillsResult := runSkillsAndState(updater, io, cur, opts.Force, opts.SkillsLayout, opts.CollectedSkills, !opts.JSON)
 
 	reason := detect.ManualReason()
 	if opts.JSON {
@@ -280,7 +287,7 @@ func doNpmUpdate(opts *UpdateOptions, io *cmdutil.IOStreams, cur, latest string,
 		return output.ErrBare(output.ExitAPI)
 	}
 
-	skillsResult := runSkillsAndState(updater, io, latest, opts.Force)
+	skillsResult := runSkillsAndState(updater, io, latest, opts.Force, opts.SkillsLayout, opts.CollectedSkills, !opts.JSON)
 
 	if opts.JSON {
 		result := map[string]interface{}{
@@ -317,21 +324,75 @@ func verificationFailureHint(updater *selfupdate.Updater, latest string) string 
 	return fmt.Sprintf("automatic rollback is unavailable on this platform; reinstall manually (skills will not be synced): npm install -g %s@%s && npx skills add larksuite/cli -y -g, or download %s", selfupdate.NpmPackage, latest, releaseURL(latest))
 }
 
-func runSkillsAndState(updater *selfupdate.Updater, io *cmdutil.IOStreams, stateVersion string, force bool) *skillscheck.SyncResult {
-	if !force {
-		if existing, ok := skillscheck.ReadSyncedVersion(); ok && normalizeVersion(existing) == normalizeVersion(stateVersion) {
+func runSkillsAndState(updater *selfupdate.Updater, io *cmdutil.IOStreams, stateVersion string, force bool, requestedLayout, requestedCollected string, allowInteractiveFallback bool) *skillscheck.SyncResult {
+	layout, collected := resolveSkillsSyncOptions(requestedLayout, requestedCollected)
+	layoutExplicit := strings.TrimSpace(requestedLayout) != ""
+	if !force && !layoutExplicit {
+		if existing, existingLayout, ok := skillscheck.ReadSyncedVersionAndLayout(); ok && existingLayout != "" && normalizeVersion(existing) == normalizeVersion(stateVersion) {
 			return nil
 		}
 	}
 	result := syncSkills(skillscheck.SyncOptions{
-		Version: stateVersion,
-		Force:   force,
-		Runner:  updater,
+		Version:         stateVersion,
+		Layout:          layout,
+		CollectedSkills: collected,
+		Force:           force,
+		Runner:          updater,
 	})
+	if result.Err != nil && result.CanFallback && allowInteractiveFallback && io.IsTerminal && confirmSeparateFallback(io, layout, result.Err) {
+		result = syncSkills(skillscheck.SyncOptions{
+			Version: stateVersion,
+			Layout:  skillscheck.LayoutSeparate,
+			Force:   force,
+			Runner:  updater,
+		})
+	}
 	if result.Err != nil && strings.Contains(result.Err.Error(), "state not written") {
 		fmt.Fprintf(io.ErrOut, "warning: %v\n", result.Err)
 	}
 	return result
+}
+
+func confirmSeparateFallback(io *cmdutil.IOStreams, layout string, err error) bool {
+	fmt.Fprintf(io.ErrOut, "Failed to install %s skills layout: %v\n", layout, err)
+	fmt.Fprintf(io.ErrOut, "Use separate layout instead? [y/N]: ")
+	var answer string
+	if _, scanErr := fmt.Fscan(io.In, &answer); scanErr != nil {
+		fmt.Fprintln(io.ErrOut)
+		return false
+	}
+	answer = strings.TrimSpace(strings.ToLower(answer))
+	return answer == "y" || answer == "yes"
+}
+
+func validateSkillsLayoutOptions(opts *UpdateOptions) error {
+	layout, ok := skillscheck.NormalizeLayout(opts.SkillsLayout)
+	if !ok {
+		return fmt.Errorf("--skills-layout must be one of separate, suite, or hybrid")
+	}
+	if opts.CollectedSkills != "" && layout != skillscheck.LayoutHybrid {
+		return fmt.Errorf("--collected-skills can only be used with --skills-layout hybrid")
+	}
+	for _, skill := range skillscheck.ParseCollectedSkills(opts.CollectedSkills) {
+		if skill == "lark-shared" {
+			return fmt.Errorf("lark-shared cannot be selected by --collected-skills; hybrid keeps it both at top level and inside lark-suite for compatibility")
+		}
+	}
+	return nil
+}
+
+func resolveSkillsSyncOptions(requestedLayout, requestedCollected string) (string, []string) {
+	if strings.TrimSpace(requestedLayout) != "" {
+		layout, _ := skillscheck.NormalizeLayout(requestedLayout)
+		return layout, skillscheck.ParseCollectedSkills(requestedCollected)
+	}
+	state, readable, err := skillscheck.ReadState()
+	if err == nil && readable {
+		if layout, ok := skillscheck.NormalizeLayout(state.Layout); ok && state.Layout != "" {
+			return layout, state.CollectedSkills
+		}
+	}
+	return skillscheck.LayoutSeparate, []string{}
 }
 
 // reportAlreadyUpToDate emits the JSON / pretty output for the
@@ -380,6 +441,12 @@ func applySkillsStatus(env map[string]interface{}, target string) {
 	if len(state.SkippedDeletedSkills) > 0 {
 		status["skipped_deleted"] = state.SkippedDeletedSkills
 	}
+	if state.Layout != "" {
+		status["layout"] = state.Layout
+	}
+	if len(state.CollectedSkills) > 0 {
+		status["collected_skills"] = state.CollectedSkills
+	}
 	env["skills_status"] = status
 }
 
@@ -407,6 +474,12 @@ func skillsSummary(r *skillscheck.SyncResult) map[string]interface{} {
 	if len(r.Failed) > 0 {
 		summary["failed"] = r.Failed
 	}
+	if r.Layout != "" {
+		summary["layout"] = r.Layout
+	}
+	if len(r.Collected) > 0 {
+		summary["collected"] = r.Collected
+	}
 	return summary
 }
 
@@ -420,9 +493,9 @@ func emitSkillsTextHints(io *cmdutil.IOStreams, r *skillscheck.SyncResult) {
 		}
 		fmt.Fprintf(io.ErrOut, "  To retry all official skills: lark-cli update --force\n")
 	case r.Force:
-		fmt.Fprintf(io.ErrOut, "%s Skills updated: restored all %d official skills\n", symOK(), len(r.Official))
+		fmt.Fprintf(io.ErrOut, "%s Skills updated: restored all %d official skills (%s layout)\n", symOK(), len(r.Official), r.Layout)
 	default:
-		fmt.Fprintf(io.ErrOut, "%s Skills updated: %d official, %d updated, %d added, %d skipped because deleted locally\n", symOK(), len(r.Official), len(r.Updated), len(r.Added), len(r.SkippedDeleted))
+		fmt.Fprintf(io.ErrOut, "%s Skills updated: %d official, %d updated, %d added, %d skipped because deleted locally (%s layout)\n", symOK(), len(r.Official), len(r.Updated), len(r.Added), len(r.SkippedDeleted), r.Layout)
 		if len(r.SkippedDeleted) > 0 {
 			fmt.Fprintf(io.ErrOut, "  To restore all official skills: lark-cli update --force\n")
 		}
