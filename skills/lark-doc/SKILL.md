@@ -39,7 +39,6 @@ lark-cli docs +update --doc "文档URL或token" --command append --content '<p>�
 - 连续执行多个文档写操作时，必须按 [`lark-doc-update.md`](references/lark-doc-update.md) 的「Block ID 生命周期」判断旧 block ID 是否还能复用；`overwrite` / `block_replace` / `block_delete` 后不要复用受影响的旧 ID，插入 / 复制后要重新 fetch 才能拿到新 block ID
 - 用户需要在文档内**创建、复制或移动**资源块（画板、电子表格、多维表格等）时，必须先读取 [`lark-doc-xml.md`](references/lark-doc-xml.md) 的「三、资源块」章节
 - 写文档时，由内容和用户意图决定表达形式；流程、架构、路线图、关键指标等信息可以使用画板，但不要默认把重要信息都画板化
-- 用户给了明确字数要求（写 N 字 / x-y 字 / x 字左右 / 上下浮动）→ 生成或改写后用 `scripts/count_chars.py`（lark-doc skill 根的 `scripts/` 下，对齐飞书「总字数」）校验，按 create/update workflow 的「字数校验」闭环处理（最多 2 轮，不达标如实告知）
 - 新增画板：思维导图/时序图/类图/饼图/甘特图用 Mermaid，由**主 Agent 直接插入** `<whiteboard type="mermaid">…</whiteboard>`，无需 SubAgent；其他图表隔离到 SubAgent——简单图由 SubAgent 直接插入 `<whiteboard type="svg">完整 SVG</whiteboard>`（不读 `lark-whiteboard`），复杂图由主 Agent 先建 `<whiteboard type="blank"></whiteboard>`，再启动 SubAgent 读取 `lark-whiteboard` 写入
 - 用户说"看一下文档里的图片/附件/素材""预览素材" → 用 `lark-cli docs +media-preview`
 - 用户明确说"下载素材" → 用 `lark-cli docs +media-download`
