@@ -173,10 +173,22 @@ lark-cli calendar events delete --calendar-id <calendar_id> --event-id <event_id
 
 `<resource>` 为 `calendars`（日历本身）/ `events`（日程）/ `event.attendees`（参与人）/ `freebusys`（忙闲）。例：`lark-cli schema calendar.events.delete`。
 
+## 常用其他域命令
+
+```bash
+# 搜索用户，更多参数详见 lark-contact
+lark-cli contact +search-user --query <query> --as user
+
+# 搜索群聊，更多参数详见 lark-im
+lark-cli im +chat-search --query <query> --as user
+```
+
 ## 不在本 skill 范围
 
 - 查询过去的视频会议记录 → [lark-vc](../lark-vc/SKILL.md)
 - 待办任务管理 → [lark-task](../lark-task/SKILL.md)
+- 通讯录 → [lark-contact](../lark-contact/SKILL.md)
+- 即时通讯 → [lark-im](../lark-im/SKILL.md)
 - 会议室物理设施管理 → 管理员后台
 
 **注意（强制性）：**
