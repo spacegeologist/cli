@@ -18,7 +18,7 @@
 
 ### 步骤一：规划与撰写（单 Agent 串行）
 
-正文由主 Agent 一人从规划到撰写从头到尾完成，**不拆分给并行子 Agent 分节写**——文档要靠全局视角保证前后连贯、不重复、不矛盾；分节并行会丢掉这个视角，也无法执行「全文级」的组件约束（这类约束没有任何单节子 Agent 看得到全文）。
+正文由主 Agent 串行维护，**不按章节拆给并行 Agent**，避免上下文割裂、重复矛盾和全文级约束失效。
 
 1. 分析用户需求：受众、目的、范围
 2. 设计大纲：根据任务自然选择结构。可以是短文、纪要、FAQ、方案、报告、清单或其他形式；不要默认套固定章节、固定开头或固定富 block 配比
@@ -38,17 +38,9 @@
 
 ### 步骤三：画板处理与润色
 
-7. **优先处理步骤二识别出的画板需求**：参考 [lark-doc-whiteboard.md](../lark-doc-whiteboard.md) 中的方式插入图表画板。画板渲染仍隔离到 SubAgent（见下方「画板 SubAgent 子任务要求」），正文本身不交给子 Agent
+7. **优先处理步骤二识别出的画板需求**：读取并按 [lark-doc-whiteboard.md](../lark-doc-whiteboard.md) 选型和插入；正文本身不交给 SubAgent
 8. 由**主 Agent 自行润色**（不另起内容子 Agent，正文始终一人维护）：文字密集且不易读时，优先拆段、加小标题或调整顺序——叙述内容保持成段，**不要默认改成列表**，只有确属并列要点 / 步骤才用列表（见 `lark-doc-style.md`）；只有确实存在行列数据时才用 `<table>`。其余富 block 的取舍一律遵循 `lark-doc-style.md` 的写作原则，不主动堆叠。需要明显分隔的主题可补充 `<hr/>`，不强制章节间都使用。本地图片使用 `docs +media-insert` 插入
 
 ### 步骤四：专项校验（按需执行）
 
 9. 仅当用户预期需要校验字数时，才读取并执行 [`lark-doc-word-stat.md`](../lark-doc-word-stat.md) 的「字数遵循校验」；否则跳过本项，不读取该 workflow。若执行了专项校验，向用户呈现结果
-
-## 画板 SubAgent 子任务要求
-
-Mermaid 图由主 Agent 直接插入 `<whiteboard type="mermaid">...</whiteboard>`，无需 SubAgent。
-
-SVG SubAgent 必须收到：文档 token、插入位置（标题/block ID）、图表目标、源内容片段、`lark-doc-xml.md` 路径，以及 [lark-doc-whiteboard.md](../lark-doc-whiteboard.md) 中的 "SVG 设计 Workflow" 指南。它只负责插入一个 `<whiteboard type="svg">...</whiteboard>`，不改其他正文，也不读取 `lark-whiteboard`。
-
-已有画板更新 SubAgent 必须收到：board_token、图表目标、推荐画板类型、源内容片段、[`../../../lark-whiteboard/SKILL.md`](../../../lark-whiteboard/SKILL.md) 路径。它只负责写入画板，不改文档正文。

@@ -30,8 +30,8 @@
 
 ### 步骤二：定向改写（单 Agent 串行）
 
-5. **优先处理步骤一识别出的画板候选段落**：参考 [lark-doc-whiteboard.md](../lark-doc-whiteboard.md) 中的方式插入图表画板。画板渲染仍隔离到 SubAgent（见下方「画板 SubAgent 子任务要求」），正文本身不交给子 Agent
-6. 由主 Agent **顺序逐节**改写，**不拆分给并行子 Agent**——这样能始终对照全文，保证风格一致、不重复、不顾此失彼，也能执行「全文级」的组件约束：
+5. **优先处理步骤一识别出的画板候选段落**：读取并按 [lark-doc-whiteboard.md](../lark-doc-whiteboard.md) 选型和插入；正文本身不交给 SubAgent
+6. 由主 Agent **顺序逐节**改写，**不按章节拆给并行 Agent**，避免上下文割裂、重复矛盾和全文级约束失效：
    - 沿用或轻微调整已有文档风格，除非用户要求彻底重排版
    - 优先通过重写段落、调整标题、补充小标题提升可读性；叙述内容保持成段，**不要默认改成列表**，只有确属并列要点 / 步骤才用列表（见 `lark-doc-style.md`）
    - 富 block 是可选表达手段，不因固定比例而添加，取舍遵循 `lark-doc-style.md` 的写作原则；画板类需求只走第 5 步
@@ -44,13 +44,5 @@
 ### 步骤四：专项校验（按需执行）
 
 9. 仅当用户预期需要校验字数时，才读取并执行 [`lark-doc-word-stat.md`](../lark-doc-word-stat.md) 的「字数遵循校验」；否则跳过本项，不读取该 workflow。若执行了专项校验，向用户呈现结果
-
-## 画板 SubAgent 子任务要求
-
-Mermaid 图由主 Agent 直接插入 `<whiteboard type="mermaid">...</whiteboard>`，无需 SubAgent。
-
-SVG SubAgent 必须收到：文档 token、插入位置（标题/block ID）、图表目标、源内容片段、`lark-doc-xml.md` 路径，以及 [lark-doc-whiteboard.md](../lark-doc-whiteboard.md) 中的 "SVG 设计 Workflow" 指南。它只负责插入一个 `<whiteboard type="svg">...</whiteboard>`，不改其他正文，也不读取 `lark-whiteboard`。
-
-已有画板更新 SubAgent 必须收到：board_token、图表目标、推荐画板类型、源内容片段、[`../../../lark-whiteboard/SKILL.md`](../../../lark-whiteboard/SKILL.md) 路径。它只负责写入画板，不改文档正文。
 
 **上下文节省提示**：主 Agent 改某节时如需重新读取，优先用 `docs +fetch --scope section --start-block-id <章节标题id>`（自动覆盖整节），或 `--scope range --start-block-id xxx --end-block-id yyy` 精确区间，只拉当前章节，不要重复拉全文。
