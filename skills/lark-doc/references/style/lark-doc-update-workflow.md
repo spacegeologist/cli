@@ -48,7 +48,7 @@
 
 ### 步骤四：专项校验（按需执行）
 
-9. 按 [`lark-doc-word-stat.md`](../lark-doc-word-stat.md) 的「字数遵循校验」判断是否执行并完成闭环。完成专项校验后向用户呈现结果。
+9. 仅当用户预期需要校验字数时，才读取并执行 [`lark-doc-word-stat.md`](../lark-doc-word-stat.md) 的「字数遵循校验」；否则跳过本项，不读取该 workflow。若执行了专项校验，向用户呈现结果
 
 ## 画板 SubAgent 子任务要求
 
